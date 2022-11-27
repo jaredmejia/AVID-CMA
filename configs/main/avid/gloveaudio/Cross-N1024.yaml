@@ -1,4 +1,4 @@
-resume: false
+resume: true
 test_only: false
 num_workers: 6
 
@@ -13,9 +13,9 @@ test_freq: 1
 print_freq: 100
 
 dataset:
-  name: "audioset"
+  name: "glove"
   full_res: true
-  batch_size: 160
+  batch_size: 128
   video_clip_duration: 0.5
   video_fps: 16.
   transforms: "msc+color"
@@ -25,12 +25,12 @@ dataset:
   spectrogram_fps: 100.
   n_fft: 512
   train:
-    split: "unbalanced_train"
+    split: "all_train"
     use_augmentation: true
     drop_last: true
     clips_per_video: 5
   test:
-    split: "eval"
+    split: "all_val"
     use_augmentation: false
     drop_last: true
 
@@ -46,7 +46,7 @@ optimizer:
 
 model:
   name: "Cross-N1024"
-  model_dir: "checkpoints/AVID/Audioset"
+  model_dir: "checkpoints/AVID/Glove"
   arch: "av_wrapper"
   args:
     proj_dim: [512, 512, 128]
@@ -60,8 +60,8 @@ model:
 loss:
   name: "AVID"
   args:
-    num_data: 1784108
-    num_negatives: 1024
+    num_data: 682
+    num_negatives: 16
     momentum: 0.5
     xModal_coeff: 1.
     wModal_coeff: 0.

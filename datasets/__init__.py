@@ -9,3 +9,4 @@ from .audioset import AudioSet
 from .kinetics import Kinetics
 from .ucf import UCF
 from .hmdb import HMDB
+from .glove import Glove
