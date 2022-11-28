@@ -23,8 +23,12 @@ def initialize_distributed_backend(args, ngpus_per_node):
             # For multiprocessing distributed training, rank needs to be the
             # global rank among all the processes
             args.rank = args.rank * ngpus_per_node + args.gpu
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                world_size=args.world_size, rank=args.rank)
+        dist.init_process_group(
+            backend=args.dist_backend,
+            init_method=args.dist_url,
+            world_size=args.world_size,
+            rank=args.rank,
+        )
 
     if args.rank == -1:
         args.rank = 0
@@ -35,37 +39,39 @@ def prep_environment(args, cfg):
     from torch.utils.tensorboard import SummaryWriter
 
     # Prepare loggers (must be configured after initialize_distributed_backend())
-    model_dir = '{}/{}'.format(cfg['model']['model_dir'], cfg['model']['name'])
+    model_dir = "{}/{}".format(cfg["model"]["model_dir"], cfg["model"]["name"])
     if args.rank == 0:
         prep_output_folder(model_dir, False)
-    log_fn = '{}/train.log'.format(model_dir)
+    log_fn = "{}/train.log".format(model_dir)
     logger = Logger(quiet=args.quiet, log_fn=log_fn, rank=args.rank)
 
     logger.add_line(str(datetime.datetime.now()))
-    if any(['SLURM' in env for env in list(os.environ.keys())]):
+    if any(["SLURM" in env for env in list(os.environ.keys())]):
         logger.add_line("=" * 30 + "   SLURM   " + "=" * 30)
         for env in os.environ.keys():
-            if 'SLURM' in env:
-                logger.add_line('{:30}: {}'.format(env, os.environ[env]))
+            if "SLURM" in env:
+                logger.add_line("{:30}: {}".format(env, os.environ[env]))
 
     logger.add_line("=" * 30 + "   Config   " + "=" * 30)
-    def print_dict(d, ident=''):
+
+    def print_dict(d, ident=""):
         for k in d:
             if isinstance(d[k], dict):
                 logger.add_line("{}{}".format(ident, k))
-                print_dict(d[k], ident='  '+ident)
+                print_dict(d[k], ident="  " + ident)
             else:
                 logger.add_line("{}{}: {}".format(ident, k, str(d[k])))
+
     print_dict(cfg)
 
     logger.add_line("=" * 30 + "   Args   " + "=" * 30)
     for k in args.__dict__:
-        logger.add_line('{:30} {}'.format(k, args.__dict__[k]))
+        logger.add_line("{:30} {}".format(k, args.__dict__[k]))
 
     tb_writter = None
-    if cfg['log2tb'] and args.rank == 0:
-        tb_dir = '{}/tensorboard'.format(model_dir)
-        os.system('mkdir -p {}'.format(tb_dir))
+    if cfg["log2tb"] and args.rank == 0:
+        tb_dir = "{}/tensorboard".format(model_dir)
+        os.system("mkdir -p {}".format(tb_dir))
         tb_writter = SummaryWriter(tb_dir)
 
     return logger, tb_writter, model_dir
@@ -73,8 +79,9 @@ def prep_environment(args, cfg):
 
 def build_model(cfg, logger=None):
     import models
-    assert cfg['arch'] in models.__dict__, 'Unknown model architecture'
-    model = models.__dict__[cfg['arch']](**cfg['args'])
+
+    assert cfg["arch"] in models.__dict__, "Unknown model architecture"
+    model = models.__dict__[cfg["arch"]](**cfg["args"])
 
     if logger is not None:
         if isinstance(model, (list, tuple)):
@@ -109,7 +116,9 @@ def distribute_model_to_cuda(models, args, batch_size, num_workers, ngpus_per_no
             if args.gpu is not None:
                 torch.cuda.set_device(args.gpu)
                 models[i].cuda(args.gpu)
-                models[i] = torch.nn.parallel.DistributedDataParallel(models[i], device_ids=[args.gpu])
+                models[i] = torch.nn.parallel.DistributedDataParallel(
+                    models[i], device_ids=[args.gpu]
+                )
             else:
                 models[i].cuda()
                 # DistributedDataParallel will divide and allocate batch_size to all
@@ -136,8 +145,8 @@ def distribute_model_to_cuda(models, args, batch_size, num_workers, ngpus_per_no
 
 
 def build_dataloaders(cfg, num_workers, distributed, logger):
-    train_loader = build_dataloader(cfg, cfg['train'], num_workers, distributed)
-    logger.add_line("\n"+"="*30+"   Train data   "+"="*30)
+    train_loader = build_dataloader(cfg, cfg["train"], num_workers, distributed)
+    logger.add_line("\n" + "=" * 30 + "   Train data   " + "=" * 30)
     logger.add_line(str(train_loader.dataset))
     return train_loader
 
@@ -149,67 +158,71 @@ def build_dataloader(db_cfg, split_cfg, num_workers, distributed):
     import datasets
 
     # Video transforms
-    num_frames = int(db_cfg['video_clip_duration'] * db_cfg['video_fps'])
-    if db_cfg['transforms'] == 'crop+color':
+    num_frames = int(db_cfg["video_clip_duration"] * db_cfg["video_fps"])
+    if db_cfg["transforms"] == "crop+color":
         video_transform = preprocessing.VideoPrep_Crop_CJ(
-            resize=db_cfg['frame_size'],
-            crop=(db_cfg['crop_size'], db_cfg['crop_size']),
-            augment=split_cfg['use_augmentation'],
+            resize=db_cfg["frame_size"],
+            crop=(db_cfg["crop_size"], db_cfg["crop_size"]),
+            augment=split_cfg["use_augmentation"],
             num_frames=num_frames,
             pad_missing=True,
         )
 
-    elif db_cfg['transforms'] == 'msc+color':
+    elif db_cfg["transforms"] == "msc+color":
         video_transform = preprocessing.VideoPrep_MSC_CJ(
-            crop=(db_cfg['crop_size'], db_cfg['crop_size']),
-            augment=split_cfg['use_augmentation'],
+            crop=(db_cfg["crop_size"], db_cfg["crop_size"]),
+            augment=split_cfg["use_augmentation"],
             num_frames=num_frames,
             pad_missing=True,
         )
 
     else:
-        raise ValueError('Unknown transform')
+        raise ValueError("Unknown transform")
 
     # Audio transforms
     audio_transforms = [
         preprocessing.AudioPrep(
             trim_pad=True,
-            duration=db_cfg['audio_clip_duration'],
-            augment=split_cfg['use_augmentation'],
-            missing_as_zero=True),
+            duration=db_cfg["audio_clip_duration"],
+            augment=split_cfg["use_augmentation"],
+            missing_as_zero=True,
+        ),
         preprocessing.LogSpectrogram(
-            db_cfg['audio_fps'],
-            n_fft=db_cfg['n_fft'],
-            hop_size=1. / db_cfg['spectrogram_fps'],
-            normalize=True)
+            db_cfg["audio_fps"],
+            n_fft=db_cfg["n_fft"],
+            hop_size=1.0 / db_cfg["spectrogram_fps"],
+            normalize=True,
+        ),
     ]
-    audio_fps_out = db_cfg['spectrogram_fps']
+    audio_fps_out = db_cfg["spectrogram_fps"]
 
-    if db_cfg['name'] == 'audioset':
+    if db_cfg["name"] == "audioset":
         dataset = datasets.AudioSet
-    elif db_cfg['name'] == 'kinetics':
+    elif db_cfg["name"] == "kinetics":
         dataset = datasets.Kinetics
-    elif db_cfg['name'] == 'glove':
+    elif db_cfg["name"] == "glove":
         dataset = datasets.Glove
     else:
-        raise ValueError('Unknown dataset')
+        raise ValueError("Unknown dataset")
 
-    clips_per_video = split_cfg['clips_per_video'] if 'clips_per_video' in split_cfg else 1
+    clips_per_video = (
+        split_cfg["clips_per_video"] if "clips_per_video" in split_cfg else 1
+    )
     db = dataset(
-        subset=split_cfg['split'],
+        subset=split_cfg["split"],
         return_video=True,
-        video_clip_duration=db_cfg['video_clip_duration'],
-        video_fps=db_cfg['video_fps'],
+        video_clip_duration=db_cfg["video_clip_duration"],
+        video_fps=db_cfg["video_fps"],
         video_transform=video_transform,
         return_audio=True,
-        audio_clip_duration=db_cfg['audio_clip_duration'],
-        audio_fps=db_cfg['audio_fps'],
+        audio_clip_duration=db_cfg["audio_clip_duration"],
+        audio_fps=db_cfg["audio_fps"],
         audio_fps_out=audio_fps_out,
         audio_transform=audio_transforms,
-        max_offsync_augm=0.5 if split_cfg['use_augmentation'] else 0,
+        max_offsync_augm=0.5 if split_cfg["use_augmentation"] else 0,
         return_labels=False,
         return_index=True,
-        mode='clip',
+        mode="clip",
         clips_per_video=clips_per_video,
     )
 
@@ -220,19 +233,22 @@ def build_dataloader(db_cfg, split_cfg, num_workers, distributed):
 
     loader = torch.utils.data.DataLoader(
         db,
-        batch_size=db_cfg['batch_size'],
+        batch_size=db_cfg["batch_size"],
         shuffle=(sampler is None),
-        drop_last=split_cfg['drop_last'],
-        num_workers=num_workers,
+        drop_last=split_cfg["drop_last"],
+        # num_workers=num_workers,
+        num_workers=0,
         pin_memory=True,
-        sampler=sampler)
+        sampler=sampler,
+    )
 
     return loader
 
 
 def build_criterion(cfg, logger=None):
     import criterions
-    criterion = criterions.__dict__[cfg['name']](**cfg['args'])
+
+    criterion = criterions.__dict__[cfg["name"]](**cfg["args"])
     if logger is not None:
         logger.add_line(str(criterion))
 
@@ -240,27 +256,29 @@ def build_criterion(cfg, logger=None):
 
 
 def build_optimizer(params, cfg, logger=None):
-    if cfg['name'] == 'sgd':
+    if cfg["name"] == "sgd":
         optimizer = torch.optim.SGD(
             params=params,
-            lr=cfg['lr']['base_lr'],
-            momentum=cfg['momentum'],
-            weight_decay=cfg['weight_decay'],
-            nesterov=cfg['nesterov']
+            lr=cfg["lr"]["base_lr"],
+            momentum=cfg["momentum"],
+            weight_decay=cfg["weight_decay"],
+            nesterov=cfg["nesterov"],
         )
 
-    elif cfg['name'] == 'adam':
+    elif cfg["name"] == "adam":
         optimizer = torch.optim.Adam(
             params=params,
-            lr=cfg['lr']['base_lr'],
-            weight_decay=cfg['weight_decay'],
-            betas=cfg['betas'] if 'betas' in cfg else [0.9, 0.999]
+            lr=cfg["lr"]["base_lr"],
+            weight_decay=cfg["weight_decay"],
+            betas=cfg["betas"] if "betas" in cfg else [0.9, 0.999],
         )
 
     else:
-        raise ValueError('Unknown optimizer.')
+        raise ValueError("Unknown optimizer.")
 
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=cfg['lr']['milestones'], gamma=cfg['lr']['gamma'])
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(
+        optimizer, milestones=cfg["lr"]["milestones"], gamma=cfg["lr"]["gamma"]
+    )
     return optimizer, scheduler
 
 
@@ -268,9 +286,9 @@ class CheckpointManager(object):
     def __init__(self, checkpoint_dir, rank=0):
         self.checkpoint_dir = checkpoint_dir
         self.rank = rank
-        self.best_metric = 0.
+        self.best_metric = 0.0
 
-    def save(self, epoch, filename=None, eval_metric=0., **kwargs):
+    def save(self, epoch, filename=None, eval_metric=0.0, **kwargs):
         if self.rank != 0:
             return
 
@@ -279,20 +297,24 @@ class CheckpointManager(object):
             self.best_metric = eval_metric
             is_best = True
 
-        state = {'epoch': epoch}
+        state = {"epoch": epoch}
         for k in kwargs:
             state[k] = kwargs[k].state_dict()
 
         if filename is None:
             save_checkpoint(state=state, is_best=is_best, model_dir=self.checkpoint_dir)
         else:
-            save_checkpoint(state=state, is_best=False, filename='{}/{}'.format(self.checkpoint_dir, filename))
+            save_checkpoint(
+                state=state,
+                is_best=False,
+                filename="{}/{}".format(self.checkpoint_dir, filename),
+            )
 
     def last_checkpoint_fn(self):
-        return '{}/checkpoint.pth.tar'.format(self.checkpoint_dir)
+        return "{}/checkpoint.pth.tar".format(self.checkpoint_dir)
 
     def best_checkpoint_fn(self):
-        return '{}/model_best.pth.tar'.format(self.checkpoint_dir)
+        return "{}/model_best.pth.tar".format(self.checkpoint_dir)
 
     def checkpoint_fn(self, last=False, best=False):
         assert best or last
@@ -306,23 +328,25 @@ class CheckpointManager(object):
         return os.path.isfile(self.checkpoint_fn(last, best))
 
     def restore(self, fn=None, restore_last=False, restore_best=False, **kwargs):
-        checkpoint_fn = fn if fn is not None else self.checkpoint_fn(restore_last, restore_best)
-        ckp = torch.load(checkpoint_fn, map_location={'cuda:0': 'cpu'})
-        start_epoch = ckp['epoch']
+        checkpoint_fn = (
+            fn if fn is not None else self.checkpoint_fn(restore_last, restore_best)
+        )
+        ckp = torch.load(checkpoint_fn, map_location={"cuda:0": "cpu"})
+        start_epoch = ckp["epoch"]
         for k in kwargs:
-            if k == 'train_criterion':
+            if k == "train_criterion":
                 kwargs[k].load_state_dict(ckp[k], strict=False)
             else:
                 kwargs[k].load_state_dict(ckp[k])
         return start_epoch
 
 
-def save_checkpoint(state, is_best, model_dir='.', filename=None):
+def save_checkpoint(state, is_best, model_dir=".", filename=None):
     if filename is None:
-        filename = '{}/checkpoint.pth.tar'.format(model_dir)
+        filename = "{}/checkpoint.pth.tar".format(model_dir)
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, '{}/model_best.pth.tar'.format(model_dir))
+        shutil.copyfile(filename, "{}/model_best.pth.tar".format(model_dir))
 
 
 def prep_output_folder(model_dir, evaluate):
@@ -334,11 +358,12 @@ def prep_output_folder(model_dir, evaluate):
 
 
 def parameter_description(model):
-    desc = ''
+    desc = ""
     for n, p in model.named_parameters():
         desc += "{:70} | {:10} | {:30} | {}\n".format(
-            n, 'Trainable' if p.requires_grad else 'Frozen',
-            ' x '.join([str(s) for s in p.size()]), str(np.prod(p.size())))
+            n,
+            "Trainable" if p.requires_grad else "Frozen",
+            " x ".join([str(s) for s in p.size()]),
+            str(np.prod(p.size())),
+        )
     return desc
-
-

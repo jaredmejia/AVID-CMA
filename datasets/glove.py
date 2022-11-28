@@ -36,13 +36,13 @@ class Glove(VideoDataset):
 
         super(Glove, self).__init__(
             return_video=return_video,
-            video_root=f"{DATA_PATH}/{subset}",
+            video_root=f"{DATA_PATH}",
             video_fns=filenames,
             video_clip_duration=video_clip_duration,
             video_fps=video_fps,
             video_transform=video_transform,
             return_audio=return_audio,
-            audio_root=f"{DATA_PATH}/{subset}",
+            audio_root=f"{DATA_PATH}",
             audio_fns=filenames,
             audio_clip_duration=audio_clip_duration,
             audio_fps=audio_fps,
@@ -73,5 +73,5 @@ def get_fnames(data_dir, meta_dir, subset):
     csv_fn = os.path.join(meta_dir, f"{subset}.csv")
     meta_df = pd.read_csv(csv_fn, header=None)
     fnames = meta_df[0].to_list()
-    fnames = [os.path.join(data_dir, fname) for fname in fnames]
+    # fnames = [os.path.join(data_dir, fname) for fname in fnames]
     return fnames
