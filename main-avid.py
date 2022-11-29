@@ -160,6 +160,19 @@ def main_worker(gpu, ngpus_per_node, args, cfg):
                 "No checkpoint found at '{}'".format(ckp_manager.last_checkpoint_fn())
             )
 
+    if cfg["finetune"]:
+        ckp_path = os.path.join(
+            cfg["model"]["model_dir"],
+            cfg["model"]["name"],
+            "checkpoint-pretrained.pth.tar",
+        )
+
+        print(f"\nLoading weights from pretrained model: {ckp_path}\n")
+        ckp = torch.load(ckp_path, map_location="cpu")
+        model.load_state_dict(ckp["model"])
+
+        del ckp
+
     cudnn.benchmark = True
 
     ############################ TRAIN #########################################
@@ -247,6 +260,15 @@ def run_phase(
         loss, loss_debug = criterion(video_emb, audio_emb, index)
         loss_meter.update(loss.item(), video.size(0))
 
+        step = epoch * len(loader) + i
+
+        for key in loss_debug:
+            try:
+                loss_val = loss_debug[key].item()
+            except AttributeError:
+                loss_val = float(loss_debug[key])
+            wandb.log({key: loss_val, "epoch": epoch, "step": step})
+
         # compute gradient and do SGD step during training
         if phase == "train":
             optimizer.zero_grad()
@@ -258,7 +280,6 @@ def run_phase(
         end = time.time()
 
         # print to terminal and tensorboard
-        step = epoch * len(loader) + i
         if (i + 1) % cfg["print_freq"] == 0 or i == 0 or i + 1 == len(loader):
             progress.display(i + 1)
             if tb_writter is not None:
@@ -272,7 +293,7 @@ def run_phase(
                         loss_val,
                         step,
                     )
-                    wandb.log({key: loss_val, 'epoch': epoch})
+                    wandb.log({key: loss_val, "epoch": epoch})
 
     # Sync metrics across all GPUs and print final averages
     if args.distributed:

@@ -7,8 +7,11 @@
 import librosa
 import torch
 import numpy as np
+import os
 import random
 from utils.videotransforms import video_transforms, volume_transforms, tensor_transforms
+
+ABS_PATH = "/home/vdean/jared_contact_mic/AVID-CMA"
 
 
 class VideoPrep_MSC_CJ(object):
@@ -182,9 +185,17 @@ class LogSpectrogram(object):
 
         if self.normalize:
             if n_fft == 512 and fps == 24000:
-                stats = np.load("datasets/assets/audio-spectDB-24k-513-norm-stats.npz")
+                stats = np.load(
+                    os.path.join(
+                        ABS_PATH, "datasets/assets/audio-spectDB-24k-513-norm-stats.npz"
+                    )
+                )
             elif n_fft == 256 and fps == 24000:
-                stats = np.load("datasets/assets/audio-spectDB-24k-257-norm-stats.npz")
+                stats = np.load(
+                    os.path.join(
+                        ABS_PATH, "datasets/assets/audio-spectDB-24k-257-norm-stats.npz"
+                    )
+                )
             self.mean, self.std = stats["mean"], stats["std"]
 
     def __call__(self, sig, sr, duration=None):

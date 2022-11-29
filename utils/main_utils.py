@@ -202,6 +202,8 @@ def build_dataloader(db_cfg, split_cfg, num_workers, distributed):
         dataset = datasets.Kinetics
     elif db_cfg["name"] == "glove":
         dataset = datasets.Glove
+    elif db_cfg["name"] == "teleop":
+        dataset = datasets.Teleop
     else:
         raise ValueError("Unknown dataset")
 
